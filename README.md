@@ -1,6 +1,9 @@
 # pharmaware (Pharma-Aware)
 
 A Full Stack Flutter Application, using REST_API created with node-express as back-end.
+
+For Realtime data transfer,websockets is used.
+
 This Project aims to fetch medicinal information from trusted resources on web and helps people to make perfect decision for their medicinal needs
 
 ## Getting Started

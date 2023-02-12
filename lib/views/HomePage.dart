@@ -1,7 +1,7 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+
+import '../utils/views_funcs.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -11,17 +11,47 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   var medList;
+  var descList = [];
   bool loading = false;
+  late IO.Socket socket;
 
   @override
   void initState() {
-    // TODO: implement initState
+    initSocket();
     super.initState();
+  }
+
+  initSocket() {
+    socket = IO.io('http://10.0.2.2:3000', <String, dynamic>{
+      'autoConnect': false,
+      'transports': ['websocket'],
+    });
+    socket.connect();
+    socket.onConnect((_) {
+      print('Connection established');
+    });
+    socket.onDisconnect((_) => print('Connection Disconnection'));
+    socket.onConnectError((err) => print(err));
+    socket.onError((err) => print(err));
+  }
+
+  @override
+  void dispose() {
+    socket.disconnect();
+    socket.dispose();
+    super.dispose();
   }
 
   TextEditingController searchController = TextEditingController(text: '');
   @override
   Widget build(BuildContext context) {
+    socket.on('fetchDescription', (data) {
+      print(data);
+      descList.add(data);
+      setState(() {
+        descList = descList;
+      });
+    });
     final height = MediaQuery.of(context).size.height;
     final width = MediaQuery.of(context).size.width;
     return Scaffold(
@@ -52,17 +82,23 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-                  Container(margin: EdgeInsets.only(left: 10), height: 10, width: 10, child: loading ? CircularProgressIndicator(color: Colors.green) : Container()),
+                  Container(margin: const EdgeInsets.only(left: 10), height: 10, width: 10, child: loading ? CircularProgressIndicator(color: Colors.green) : Container()),
                   IconButton(
                       onPressed: (() async {
                         setState(() {
                           loading = true;
+                          descList = [];
                         });
-                        var result = await getMedData(searchController.text);
+                        var result1 = await getMedData(searchController.text);
                         setState(() {
-                          medList = result['meds_1mg'];
+                          medList = result1['meds_1mg'];
                           loading = false;
                         });
+                        // var result2 = await postDesdata(medList);
+                        // print(result2);
+                        // setState(() {
+                        //   descList = result2['descLinks'];
+                        // });
                       }),
                       icon: const Icon(Icons.medication, color: Colors.red, size: 40))
                 ],
@@ -72,7 +108,7 @@ class _HomePageState extends State<HomePage> {
                 height: height * 0.76,
                 width: width,
                 child: medList == null
-                    ? Center(child: loading ? CircularProgressIndicator() : Text('Looking for Medicines? search here..'))
+                    ? Center(child: loading ? const CircularProgressIndicator() : const Text('Looking for Medicines? search here..'))
                     : ListView.builder(
                         itemCount: medList == null ? 0 : medList.length,
                         itemBuilder: ((context, index) {
@@ -83,12 +119,17 @@ class _HomePageState extends State<HomePage> {
                             color: Colors.amber.shade50,
                             child: Column(
                               children: [
-                                Text("${medList?[index]['title']}", style: TextStyle(fontSize: 20)),
+                                Text("${medList?[index]['title']}", style: const TextStyle(fontSize: 20)),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                  children: [Image.network("${medList?[index]['imageUrl']}"), Text("${medList?[index]['price']}", style: TextStyle(fontSize: 20))],
+                                  children: [
+                                    medList?[index]['imageUrl'] == ""
+                                        ? Image.asset('assets/default.png', height: 100, width: 100, fit: BoxFit.contain)
+                                        : Image.network("${medList?[index]['imageUrl']}"),
+                                    Text("${medList?[index]['price']}", style: TextStyle(fontSize: 20)),
+                                  ],
                                 ),
-                                Text("${medList?[index]['price']}")
+                                descList.isEmpty ? Container() : Text("${descList[index]}")
                               ],
                             ),
                           );
@@ -99,12 +140,4 @@ class _HomePageState extends State<HomePage> {
           ),
         ));
   }
-}
-
-getMedData(String name) async {
-  String url = 'http://10.0.2.2:3000/:${name}';
-  final response = await http.get(Uri.parse(url), headers: {"Content-Type": "application/json"});
-  final result = json.decode(response.body);
-  print(result);
-  return result;
 }
