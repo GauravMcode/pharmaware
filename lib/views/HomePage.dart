@@ -10,10 +10,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  var medList;
+  var medList = [];
   var descList = [];
   bool loading = false;
-  late IO.Socket socket;
+  IO.Socket? socket;
 
   @override
   void initState() {
@@ -26,32 +26,37 @@ class _HomePageState extends State<HomePage> {
       'autoConnect': false,
       'transports': ['websocket'],
     });
-    socket.connect();
-    socket.onConnect((_) {
+    socket?.connect();
+    socket?.onConnect((_) {
       print('Connection established');
+      print(socket?.id);
     });
-    socket.onDisconnect((_) => print('Connection Disconnection'));
-    socket.onConnectError((err) => print(err));
-    socket.onError((err) => print(err));
+    socket?.onDisconnect((_) => print('Connection Disconnection'));
+    socket?.onConnectError((err) => print(err));
+    socket?.onError((err) => print(err));
+    socket?.on('fetchDescription', (data) {
+      setState(() {
+        descList.add(data);
+      });
+    });
+    socket?.on('medList', (data) {
+      // print(data[0]['title']);
+      setState(() {
+        medList = data;
+      });
+    });
   }
 
   @override
   void dispose() {
-    socket.disconnect();
-    socket.dispose();
+    socket?.disconnect();
+    socket?.dispose();
     super.dispose();
   }
 
   TextEditingController searchController = TextEditingController(text: '');
   @override
   Widget build(BuildContext context) {
-    socket.on('fetchDescription', (data) {
-      print(data);
-      descList.add(data);
-      setState(() {
-        descList = descList;
-      });
-    });
     final height = MediaQuery.of(context).size.height;
     final width = MediaQuery.of(context).size.width;
     return Scaffold(
@@ -86,19 +91,18 @@ class _HomePageState extends State<HomePage> {
                   IconButton(
                       onPressed: (() async {
                         setState(() {
+                          if (medList.isNotEmpty && medList.length != descList.length) {
+                            socket?.emit('stopEmit', 'stop');
+                          }
                           loading = true;
                           descList = [];
+                          // medList = [];
                         });
                         var result1 = await getMedData(searchController.text);
                         setState(() {
                           medList = result1['meds_1mg'];
                           loading = false;
                         });
-                        // var result2 = await postDesdata(medList);
-                        // print(result2);
-                        // setState(() {
-                        //   descList = result2['descLinks'];
-                        // });
                       }),
                       icon: const Icon(Icons.medication, color: Colors.red, size: 40))
                 ],
@@ -107,10 +111,13 @@ class _HomePageState extends State<HomePage> {
               Container(
                 height: height * 0.76,
                 width: width,
-                child: medList == null
+                child: medList.isEmpty
                     ? Center(child: loading ? const CircularProgressIndicator() : const Text('Looking for Medicines? search here..'))
                     : ListView.builder(
-                        itemCount: medList == null ? 0 : medList.length,
+                        // children: [
+                        //   List.generate(length, (index) => null)
+                        // ],
+                        itemCount: medList.length,
                         itemBuilder: ((context, index) {
                           return Card(
                             borderOnForeground: true,
@@ -119,17 +126,19 @@ class _HomePageState extends State<HomePage> {
                             color: Colors.amber.shade50,
                             child: Column(
                               children: [
-                                Text("${medList?[index]['title']}", style: const TextStyle(fontSize: 20)),
+                                Text("${medList[index]['title']}", style: const TextStyle(fontSize: 20)),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                   children: [
-                                    medList?[index]['imageUrl'] == ""
-                                        ? Image.asset('assets/default.png', height: 100, width: 100, fit: BoxFit.contain)
-                                        : Image.network("${medList?[index]['imageUrl']}"),
-                                    Text("${medList?[index]['price']}", style: TextStyle(fontSize: 20)),
+                                    medList[index]['imageUrl'] == "" ? Image.asset('assets/default.png', height: 100, width: 100, fit: BoxFit.contain) : Image.network("${medList[index]['imageUrl']}"),
+                                    Text("${medList[index]['price']}", style: const TextStyle(fontSize: 20)),
                                   ],
                                 ),
-                                descList.isEmpty ? Container() : Text("${descList[index]}")
+                                descList.isNotEmpty && (descList.length >= index + 1)
+                                    ? Text("${descList[index]}")
+                                    : loading
+                                        ? Container()
+                                        : const Text("Loading description..") //descList.length>=index+1?"Loading description..":
                               ],
                             ),
                           );
