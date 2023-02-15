@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
@@ -13,6 +15,7 @@ class _HomePageState extends State<HomePage> {
   var medList = [];
   var descList = [];
   bool loading = false;
+  bool fetchError = false;
   IO.Socket? socket;
 
   @override
@@ -22,7 +25,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   initSocket() {
-    socket = IO.io('http://10.0.2.2:3000', <String, dynamic>{
+    socket = IO.io('https://pharmaawarerestapi-production.up.railway.app', <String, dynamic>{
       'autoConnect': false,
       'transports': ['websocket'],
     });
@@ -61,6 +64,8 @@ class _HomePageState extends State<HomePage> {
     final width = MediaQuery.of(context).size.width;
     return Scaffold(
         appBar: AppBar(
+          leading: medList.isNotEmpty || loading ? Image.asset('assets/default.png', height: 60, width: 60, fit: BoxFit.contain) : Container(),
+          elevation: 15,
           title: const Text('Pharm-Aware!'),
           centerTitle: true,
           backgroundColor: Colors.blue[100],
@@ -100,7 +105,12 @@ class _HomePageState extends State<HomePage> {
                         });
                         var result1 = await getMedData(searchController.text);
                         setState(() {
-                          medList = result1['meds_1mg'];
+                          if (result1['statusCode'] != 200) {
+                            fetchError = true;
+                          } else {
+                            fetchError = false;
+                            medList = result1['result']['meds_1mg'];
+                          }
                           loading = false;
                         });
                       }),
@@ -108,43 +118,54 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
               const SizedBox(height: 20),
-              Container(
-                height: height * 0.76,
-                width: width,
-                child: medList.isEmpty
-                    ? Center(child: loading ? const CircularProgressIndicator() : const Text('Looking for Medicines? search here..'))
-                    : ListView.builder(
-                        // children: [
-                        //   List.generate(length, (index) => null)
-                        // ],
-                        itemCount: medList.length,
-                        itemBuilder: ((context, index) {
-                          return Card(
-                            borderOnForeground: true,
-                            elevation: 20,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            color: Colors.amber.shade50,
-                            child: Column(
-                              children: [
-                                Text("${medList[index]['title']}", style: const TextStyle(fontSize: 20)),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    medList[index]['imageUrl'] == "" ? Image.asset('assets/default.png', height: 100, width: 100, fit: BoxFit.contain) : Image.network("${medList[index]['imageUrl']}"),
-                                    Text("${medList[index]['price']}", style: const TextStyle(fontSize: 20)),
-                                  ],
-                                ),
-                                descList.isNotEmpty && (descList.length >= index + 1)
-                                    ? Text("${descList[index]}")
-                                    : loading
-                                        ? Container()
-                                        : const Text("Loading description..") //descList.length>=index+1?"Loading description..":
-                              ],
+              fetchError && !loading
+                  ? const Center(child: Text('Some Error occured! Try Again..', style: TextStyle(color: Colors.red)))
+                  : Container(
+                      height: height * 0.76,
+                      width: width,
+                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(40)),
+                      child: medList.isEmpty
+                          ? Center(
+                              child: loading
+                                  ? const CircularProgressIndicator()
+                                  : Column(children: [
+                                      Image.asset('assets/default.png', height: 200, width: 200, fit: BoxFit.contain),
+                                      const Text('Looking for Medicines? search here..'),
+                                    ]))
+                          : ListView.builder(
+                              itemCount: medList.length,
+                              itemBuilder: ((context, index) {
+                                return Card(
+                                  borderOnForeground: true,
+                                  elevation: 20,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  color: Colors.amber.shade50,
+                                  child: Column(
+                                    children: [
+                                      Text("${medList[index]['title']}", style: const TextStyle(fontSize: 20, color: Colors.blue)),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                        children: [
+                                          medList[index]['imageUrl'] == ""
+                                              ? Image.asset('assets/default.png', height: 100, width: 100, fit: BoxFit.contain)
+                                              : Image.network("${medList[index]['imageUrl']}"),
+                                          Text("${medList[index]['price']}", style: const TextStyle(fontSize: 20, color: Colors.green)),
+                                        ],
+                                      ),
+                                      descList.isNotEmpty && (descList.length >= index + 1)
+                                          ? Container(
+                                              decoration: BoxDecoration(borderRadius: BorderRadius.circular(40)),
+                                              child: Text("${descList[index]}"),
+                                            )
+                                          : loading
+                                              ? Container()
+                                              : const Text("Loading description..") //descList.length>=index+1?"Loading description..":
+                                    ],
+                                  ),
+                                );
+                              }),
                             ),
-                          );
-                        }),
-                      ),
-              )
+                    )
             ],
           ),
         ));
